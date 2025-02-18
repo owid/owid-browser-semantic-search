@@ -1,7 +1,5 @@
-import { PGlite } from "@electric-sql/pglite";
-import { countRows, getDb as getDb, initSchema, search } from "./utils/db.ts";
 import { useState, useEffect, useRef } from "react";
-import { EmbeddingRow, WorkerMessage } from "./types.ts";
+import { EmbeddingRow, RecordType, WorkerMessage } from "./types.ts";
 import {
   Container,
   TextField,
@@ -14,6 +12,8 @@ import {
   CssBaseline,
   ThemeProvider,
   createTheme,
+  LinearProgress,
+  Box,
 } from "@mui/material";
 
 const darkTheme = createTheme({
@@ -24,32 +24,43 @@ const darkTheme = createTheme({
 
 export default function App() {
   const [input, setInput] = useState("");
-  const [result, setResult] = useState<EmbeddingRow[]>([]);
-  const [progress, setProgress] = useState(null);
-  const initializing = useRef(false);
+  const [results, setResults] = useState<EmbeddingRow[]>([]);
+  const [progress, setProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [dbStats, setDbStats] = useState<{ type: RecordType; count: number }[]>(
+    []
+  );
 
   // Create a reference to the worker object.
   const worker = useRef<Worker>(null);
 
-  // Set up DB
-  const db = useRef<PGlite>(null);
-
   // Create a callback function for messages from the worker thread.
   const onMessageReceived = async (e: MessageEvent) => {
     switch (e.data.status) {
-      case WorkerMessage.PROGRESS:
+      case WorkerMessage.PROGRESS_MODEL:
+        // setProgressModel(e.data.progress);
+        if (e.data.progress.ready) {
+          console.log("Progress is ready:", e.data.progress);
+        }
+        break;
+      case WorkerMessage.PROGRESS: {
         setProgress(e.data.progress);
         break;
-      case WorkerMessage.EMBEDDINGS_GENERATED:
-        setProgress(null); // Reset progress after completion
+      }
+      case WorkerMessage.EMBEDDINGS_GENERATED: {
+        setProgress(null);
         break;
-      case WorkerMessage.RETURN_EMBEDDING: {
-        console.log("returning embedding", e.data.embedding);
-        // Cosine similarity search in pgvector
-        if (!db.current) return;
-        console.log("Searching for similar embeddings");
-        const searchResults = await search(db.current, e.data.embedding);
-        setResult(searchResults);
+      }
+      case WorkerMessage.SEARCH_RESULTS: {
+        setLoading(false);
+        setResults(e.data.searchResults);
+        break;
+      }
+      case WorkerMessage.DB_STATS: {
+        setDbStats(e.data.dbStats);
         break;
       }
       default:
@@ -57,32 +68,27 @@ export default function App() {
     }
   };
 
-  const requestEmbedding = (text: string) => {
+  const search = async (text: string) => {
     if (worker.current) {
+      setLoading(true);
       worker.current.postMessage({
-        cmd: WorkerMessage.REQUEST_EMBEDDING,
+        cmd: WorkerMessage.SEARCH,
         text,
       });
     }
   };
 
   useEffect(() => {
-    const setupDb = async () => {
-      initializing.current = true;
-      db.current = await getDb();
-      await initSchema(db.current);
-      // count rows
-      const count = await countRows(db.current, "embeddings");
-      console.log(`Total rows in the database: ${count}`);
-    };
-    if (!initializing.current) setupDb();
-
     // Set up worker
     worker.current = new Worker(new URL("./worker.js", import.meta.url), {
       type: "module",
     });
     // Attach the callback functions as an event listener.
     worker.current.addEventListener("message", onMessageReceived);
+
+    worker.current.postMessage({
+      cmd: WorkerMessage.DB_STATS,
+    });
 
     return () => {
       if (worker.current) {
@@ -98,7 +104,7 @@ export default function App() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            requestEmbedding(input);
+            search(input);
           }}
         >
           <TextField
@@ -107,7 +113,7 @@ export default function App() {
             margin="normal"
             placeholder="Enter text here"
             onChange={(e) => {
-              setResult([]);
+              setResults([]);
               setInput(e.target.value);
             }}
           />
@@ -117,6 +123,7 @@ export default function App() {
             color="primary"
             fullWidth
             sx={{ mb: 2 }}
+            loading={loading}
           >
             Semantic Search
           </Button>
@@ -127,8 +134,7 @@ export default function App() {
           fullWidth
           sx={{ mb: 2 }}
           onClick={() => {
-            if (!worker.current || !db.current) return;
-            db.current.query("DELETE FROM embeddings");
+            if (!worker.current) return;
             worker.current.postMessage({
               cmd: WorkerMessage.GENERATE_EMBEDDINGS,
             });
@@ -136,16 +142,35 @@ export default function App() {
         >
           Regenerate Embeddings
         </Button>
-        {progress && (
+        {/* {progressModel && (
           <Typography align="center">
-            Progress: {JSON.stringify(progress)}
+            Model Loading Progress: {JSON.stringify(progressModel)}
           </Typography>
+        )} */}
+        {progress && (
+          <Box sx={{ width: "100%", mb: 2 }}>
+            <LinearProgress
+              variant="determinate"
+              value={(progress.current / progress.total) * 100}
+            />
+            <Typography align="center">
+              Embedding Generation Progress: {progress.current} /{" "}
+              {progress.total}
+            </Typography>
+          </Box>
         )}
-        <Typography align="center" variant="h6" gutterBottom>
-          Similarity Search results:
-        </Typography>
+        {dbStats.length > 0 && (
+          <Box sx={{ width: "100%", mb: 2 }}>
+            <Typography variant="h6">Database Statistics:</Typography>
+            {dbStats.map((stat, index) => (
+              <Typography key={index}>
+                {stat.type}: {stat.count}
+              </Typography>
+            ))}
+          </Box>
+        )}
         <Grid container spacing={2}>
-          {result.map((item, index) => (
+          {results.map((item, index) => (
             <Grid size={4} key={index}>
               <Card>
                 <CardContent>

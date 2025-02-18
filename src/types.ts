@@ -1,10 +1,14 @@
 export enum WorkerMessage {
-  REQUEST_EMBEDDING = "request-embedding",
-  RETURN_EMBEDDING = "return-embedding",
+  SEARCH = "search",
+  SEARCH_RESULTS = "search-results",
+  PROGRESS_MODEL = "progress_model",
   PROGRESS = "progress",
   GENERATE_EMBEDDINGS = "generate-embeddings",
   EMBEDDINGS_GENERATED = "embeddings-generated",
+  DB_STATS = "db-stats",
 }
+
+export type RecordType = "chart" | "insight" | "gdoc" | "dod" | "country";
 
 export type CoredumpJsonRaw = Array<{
   title?: string;
@@ -16,7 +20,7 @@ export type CoredumpJsonRaw = Array<{
 
 export interface RowToEmbed {
   title: string;
-  type: "chart" | "insight" | "article";
+  type: RecordType;
   loc: string | null;
   content: string | null;
   lastmod: string | null;
@@ -43,9 +47,7 @@ export const parseCoredumpJson = (json: CoredumpJsonRaw): RowToEmbed[] => {
     .filter((x): x is RowToEmbed => !!x);
 };
 
-export const isValidType = (
-  type?: string
-): type is "chart" | "insight" | "article" => {
+export const isValidType = (type?: string): type is RecordType => {
   if (!type) return false;
-  return ["chart", "insight", "article"].includes(type);
+  return ["chart", "insight", "gdoc", "dod", "country"].includes(type);
 };

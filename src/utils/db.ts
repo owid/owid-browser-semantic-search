@@ -1,20 +1,32 @@
 import { PGlite } from "@electric-sql/pglite";
 import { vector } from "@electric-sql/pglite/vector";
-import { memoize } from "lodash";
-import { EmbeddingRow } from "../types";
+import { EmbeddingRow, RecordType } from "../types";
 
-const createDBInstance = async (context = "search") => {
-  console.log("Creating DB instance for context", context);
+const createDbInstance = async () => {
+  // turn on persistent storage
+  // if (navigator.storage && navigator.storage.persist) {
+  //   const isPersisted = await navigator.storage.persist();
+  //   console.log(`Persisted storage granted: ${isPersisted}`);
+  // }
   const db = new PGlite("idb://owid-semantic-search", {
     extensions: {
       vector,
     },
   });
-  console.log("Waiting for DB to be ready");
-  return db.waitReady.then(() => db);
+  await db.waitReady;
+  await initSchema(db);
+  console.log("initialized db");
+  return db;
 };
 
-export const getDb = memoize(createDBInstance);
+let dbInstance: PGlite | null = null;
+
+export const getDb = async (): Promise<PGlite> => {
+  if (!dbInstance) {
+    dbInstance = await createDbInstance();
+  }
+  return dbInstance;
+};
 
 export const initSchema = async (db: PGlite) => {
   return await db.exec(`
@@ -23,7 +35,7 @@ export const initSchema = async (db: PGlite) => {
     create table if not exists embeddings (
       id bigint primary key generated always as identity,
       title text not null,
-      type text not null check (type in ('chart', 'insight', 'article')),
+      type text not null check (type in ('chart', 'insight', 'gdoc', 'dod', 'country')),
       loc text,
       content text,
       embedding vector (384)
@@ -33,11 +45,11 @@ export const initSchema = async (db: PGlite) => {
   `);
 };
 
-export const countRows = async (db: PGlite, table: string) => {
-  const res = await db.query<{ count: number }>(
-    `SELECT COUNT(*) FROM ${table};`
+export const countRowsPerType = async (db: PGlite) => {
+  const res = await db.query<{ type: RecordType; count: number }>(
+    `SELECT type, COUNT(*) FROM embeddings GROUP BY type;`
   );
-  return res.rows[0].count;
+  return res.rows;
 };
 
 // Cosine similarity search in pgvector
@@ -45,7 +57,7 @@ export const search = async (
   db: PGlite,
   embedding: number[],
   match_threshold = 0.8,
-  limit = 3
+  limit = 10
 ): Promise<EmbeddingRow[]> => {
   const res = await db.query<EmbeddingRow>(
     `

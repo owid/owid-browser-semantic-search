@@ -14,6 +14,7 @@ import {
   Embedding,
   EmbeddingRow,
   parseCoredumpJson,
+  RecordType,
   WorkerMessage,
 } from "./types";
 import { PGlite } from "@electric-sql/pglite";
@@ -96,7 +97,8 @@ self.addEventListener("message", async (event) => {
     }
     case WorkerMessage.SEARCH: {
       const embedding = await getEmbeddingFor(event.data.text);
-      const searchResults = await search(db, embedding);
+      const searchTypes: RecordType[] = event.data.searchTypes;
+      const searchResults = await search(db, embedding, searchTypes);
       self.postMessage({ status: WorkerMessage.SEARCH_RESULTS, searchResults });
       break;
     }

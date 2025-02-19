@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { EmbeddingRow, RecordType, WorkerMessage } from "./types.ts";
+import {
+  contentTypes,
+  EmbeddingRow,
+  RecordType,
+  WorkerMessage,
+} from "./types.ts";
 import {
   Container,
   TextField,
@@ -7,13 +12,18 @@ import {
   Typography,
   Card,
   CardContent,
-  Link,
   Grid2 as Grid,
   CssBaseline,
   ThemeProvider,
   createTheme,
   LinearProgress,
   Box,
+  CardActions,
+  CardActionArea,
+  Backdrop,
+  CircularProgress,
+  ToggleButtonGroup,
+  ToggleButton,
 } from "@mui/material";
 import { Masonry } from "@mui/lab";
 
@@ -23,25 +33,17 @@ const darkTheme = createTheme({
   },
 });
 
-const defaultResults: EmbeddingRow[] = [
-  {
-    title: "Loading...",
-    type: "chart",
-    loc: "#",
-    content: "Please wait...",
-    lastmod: null,
-    embedding: [],
-  },
-];
-
 export default function App() {
   const [input, setInput] = useState("");
-  const [results, setResults] = useState<EmbeddingRow[]>(defaultResults);
+  const [searchTypes, setSearchTypes] = useState(contentTypes);
+  const [iframeSrc, setIframeSrc] = useState<string | null>(null);
+  const [results, setResults] = useState<EmbeddingRow[]>([]);
   const [progress, setProgress] = useState<{
     current: number;
     total: number;
   } | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingDb, setLoadingDb] = useState(true);
+  const [loadingSearch, setLoadingSearch] = useState(false);
   const [dbStats, setDbStats] = useState<{ type: RecordType; count: number }[]>(
     []
   );
@@ -64,16 +66,16 @@ export default function App() {
       }
       case WorkerMessage.EMBEDDINGS_GENERATED: {
         setProgress(null);
-        setLoading(false);
+        setLoadingDb(false);
         break;
       }
       case WorkerMessage.SEARCH_RESULTS: {
-        setLoading(false);
+        setLoadingSearch(false);
         setResults(e.data.searchResults);
         break;
       }
       case WorkerMessage.DB_READY: {
-        setLoading(false);
+        setLoadingDb(false);
         break;
       }
       case WorkerMessage.DB_STATS: {
@@ -85,12 +87,13 @@ export default function App() {
     }
   };
 
-  const search = async (text: string) => {
+  const search = async (text: string, types?: RecordType[]) => {
     if (worker.current) {
-      setLoading(true);
+      setLoadingSearch(true);
       worker.current.postMessage({
         cmd: WorkerMessage.SEARCH,
         text,
+        searchTypes: types || searchTypes,
       });
     }
   };
@@ -115,9 +118,20 @@ export default function App() {
     };
   }, []);
 
+  const iframeSrcOwid = iframeSrc?.replace(
+    /^https?:\/\/[^/]+/,
+    "https://ourworldindata.org"
+  );
+
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
+      <Backdrop
+        sx={(theme) => ({ color: "#fff", zIndex: theme.zIndex.drawer + 1 })}
+        open={loadingDb}
+      >
+        <CircularProgress color="inherit" />
+      </Backdrop>
       <Container maxWidth="md" sx={{ mt: 4 }}>
         <form
           onSubmit={(e) => {
@@ -132,10 +146,11 @@ export default function App() {
                 variant="outlined"
                 margin="normal"
                 placeholder="Enter text here"
-                disabled={loading}
+                disabled={loadingDb}
                 onChange={(e) => {
                   setInput(e.target.value);
                 }}
+                value={input}
               />
             </Grid>
             <Grid size={3}>
@@ -144,31 +159,81 @@ export default function App() {
                 variant="contained"
                 color="primary"
                 fullWidth
-                loading={loading}
+                loading={loadingSearch}
               >
                 Semantic Search
               </Button>
             </Grid>
           </Grid>
         </form>
+        <ToggleButtonGroup
+          value={searchTypes}
+          onChange={(_, types) => {
+            console.log("types", types);
+            setSearchTypes(types);
+            search(input, types);
+          }}
+          aria-label="search types"
+          size="small"
+        >
+          <ToggleButton value="chart">Charts</ToggleButton>
+          <ToggleButton value="insight">Insights</ToggleButton>
+          <ToggleButton value="gdoc">Articles</ToggleButton>
+        </ToggleButtonGroup>
         <Box sx={{ mt: 4 }}>
+          {iframeSrcOwid && (
+            <iframe
+              src={iframeSrcOwid}
+              style={{
+                width: "100%",
+                height: "600px",
+                border: "none",
+                marginBottom: "20px",
+              }}
+            />
+          )}
           <Masonry columns={3} spacing={2}>
             {results.map((item) => (
-              <Link
-                href={item.loc || "#"}
-                color="inherit"
-                underline="none"
-                key={item.loc || item.title}
-                sx={{ display: "block" }}
-              >
-                <Card>
+              <Card key={item.loc || item.title}>
+                <CardActionArea
+                  onClick={() => {
+                    setInput(item.title);
+                    search(item.title);
+                    setIframeSrc(null);
+                  }}
+                >
                   <CardContent>
-                    <Typography variant="h6">{item.title}</Typography>
-                    <Typography color="textSecondary">{item.type}</Typography>
+                    <Typography lineHeight={1.2} variant="h6" gutterBottom>
+                      {item.title}
+                    </Typography>
                     <Typography>{item.content}</Typography>
                   </CardContent>
-                </Card>
-              </Link>
+                </CardActionArea>
+                {item.type === "chart" && (
+                  <CardActions>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setIframeSrc(item.loc);
+                      }}
+                      // startIcon={<ShowChart />}
+                    >
+                      View chart
+                    </Button>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setIframeSrc(
+                          item.loc ? item.loc.concat("?tab=table") : null
+                        );
+                      }}
+                      // startIcon={<TableChart />}
+                    >
+                      View data
+                    </Button>
+                  </CardActions>
+                )}
+              </Card>
             ))}
           </Masonry>
         </Box>
@@ -177,11 +242,10 @@ export default function App() {
             variant="contained"
             color="secondary"
             fullWidth
-            loading={loading}
             sx={{ mb: 2 }}
             onClick={() => {
               if (!worker.current) return;
-              setLoading(true);
+              setLoadingDb(true);
               worker.current.postMessage({
                 cmd: WorkerMessage.GENERATE_EMBEDDINGS,
               });

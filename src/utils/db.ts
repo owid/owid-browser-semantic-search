@@ -1,6 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
 import { vector } from "@electric-sql/pglite/vector";
-import { EmbeddingRow, RecordType } from "../types";
+import { contentTypes, EmbeddingRow, RecordType } from "../types";
 
 const createDbInstance = async () => {
   // turn on persistent storage
@@ -35,7 +35,7 @@ export const initSchema = async (db: PGlite) => {
     create table if not exists embeddings (
       id bigint primary key generated always as identity,
       title text not null,
-      type text not null check (type in ('chart', 'insight', 'gdoc', 'dod', 'country')),
+      type text not null check (type in (${contentTypes.join(",")})),
       loc text,
       content text,
       embedding vector (384)
@@ -56,15 +56,17 @@ export const countRowsPerType = async (db: PGlite) => {
 export const search = async (
   db: PGlite,
   embedding: number[],
+  types: RecordType[] = ["chart", "insight", "gdoc"],
   match_threshold = 0.8,
   limit = 10
 ): Promise<EmbeddingRow[]> => {
   const res = await db.query<EmbeddingRow>(
     `
     select * from embeddings
-
+    where type in (${types.map((type) => `'${type}'`).join(",")})
+    
     -- The inner product is negative, so we negate match_threshold
-    where embeddings.embedding <#> $1 < $2
+    and embeddings.embedding <#> $1 < $2
 
     -- Our embeddings are normalized to length 1, so cosine similarity
     -- and inner product will produce the same query results.

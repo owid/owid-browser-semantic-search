@@ -48,7 +48,9 @@ export const parseCoredumpJson = (json: CoredumpJsonRaw): RowToEmbed[] => {
     .filter((x): x is RowToEmbed => !!x);
 };
 
+export const contentTypes = ["chart", "insight", "gdoc", "dod", "country"];
+
 export const isValidType = (type?: string): type is RecordType => {
   if (!type) return false;
-  return ["chart", "insight", "gdoc", "dod", "country"].includes(type);
+  return contentTypes.includes(type);
 };

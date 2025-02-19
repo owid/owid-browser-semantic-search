@@ -15,6 +15,7 @@ import {
   LinearProgress,
   Box,
 } from "@mui/material";
+import { Masonry } from "@mui/lab";
 
 const darkTheme = createTheme({
   palette: {
@@ -22,14 +23,25 @@ const darkTheme = createTheme({
   },
 });
 
+const defaultResults: EmbeddingRow[] = [
+  {
+    title: "Loading...",
+    type: "chart",
+    loc: "#",
+    content: "Please wait...",
+    lastmod: null,
+    embedding: [],
+  },
+];
+
 export default function App() {
   const [input, setInput] = useState("");
-  const [results, setResults] = useState<EmbeddingRow[]>([]);
+  const [results, setResults] = useState<EmbeddingRow[]>(defaultResults);
   const [progress, setProgress] = useState<{
     current: number;
     total: number;
   } | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [dbStats, setDbStats] = useState<{ type: RecordType; count: number }[]>(
     []
   );
@@ -52,11 +64,16 @@ export default function App() {
       }
       case WorkerMessage.EMBEDDINGS_GENERATED: {
         setProgress(null);
+        setLoading(false);
         break;
       }
       case WorkerMessage.SEARCH_RESULTS: {
         setLoading(false);
         setResults(e.data.searchResults);
+        break;
+      }
+      case WorkerMessage.DB_READY: {
+        setLoading(false);
         break;
       }
       case WorkerMessage.DB_STATS: {
@@ -86,9 +103,10 @@ export default function App() {
     // Attach the callback functions as an event listener.
     worker.current.addEventListener("message", onMessageReceived);
 
-    worker.current.postMessage({
-      cmd: WorkerMessage.DB_STATS,
-    });
+    // todo : move this to a button
+    // worker.current.postMessage({
+    //   cmd: WorkerMessage.DB_STATS,
+    // });
 
     return () => {
       if (worker.current) {
@@ -100,48 +118,78 @@ export default function App() {
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
-      <Container maxWidth="md">
+      <Container maxWidth="md" sx={{ mt: 4 }}>
         <form
           onSubmit={(e) => {
             e.preventDefault();
             search(input);
           }}
         >
-          <TextField
-            fullWidth
-            variant="outlined"
-            margin="normal"
-            placeholder="Enter text here"
-            onChange={(e) => {
-              setResults([]);
-              setInput(e.target.value);
-            }}
-          />
-          <Button
-            type="submit"
-            variant="contained"
-            color="primary"
-            fullWidth
-            sx={{ mb: 2 }}
-            loading={loading}
-          >
-            Semantic Search
-          </Button>
+          <Grid container spacing={2} alignItems="center">
+            <Grid size={9}>
+              <TextField
+                fullWidth
+                variant="outlined"
+                margin="normal"
+                placeholder="Enter text here"
+                disabled={loading}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                }}
+              />
+            </Grid>
+            <Grid size={3}>
+              <Button
+                type="submit"
+                variant="contained"
+                color="primary"
+                fullWidth
+                loading={loading}
+              >
+                Semantic Search
+              </Button>
+            </Grid>
+          </Grid>
         </form>
-        <Button
-          variant="contained"
-          color="secondary"
-          fullWidth
-          sx={{ mb: 2 }}
-          onClick={() => {
-            if (!worker.current) return;
-            worker.current.postMessage({
-              cmd: WorkerMessage.GENERATE_EMBEDDINGS,
-            });
-          }}
-        >
-          Regenerate Embeddings
-        </Button>
+        <Box sx={{ mt: 4 }}>
+          <Masonry columns={3} spacing={2}>
+            {results.map((item) => (
+              <Link
+                href={item.loc || "#"}
+                color="inherit"
+                underline="none"
+                key={item.loc || item.title}
+                sx={{ display: "block" }}
+              >
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6">{item.title}</Typography>
+                    <Typography color="textSecondary">{item.type}</Typography>
+                    <Typography>{item.content}</Typography>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </Masonry>
+        </Box>
+        <Box sx={{ mt: 4 }}>
+          <Button
+            variant="contained"
+            color="secondary"
+            fullWidth
+            loading={loading}
+            sx={{ mb: 2 }}
+            onClick={() => {
+              if (!worker.current) return;
+              setLoading(true);
+              worker.current.postMessage({
+                cmd: WorkerMessage.GENERATE_EMBEDDINGS,
+              });
+            }}
+          >
+            Regenerate Embeddings
+          </Button>
+        </Box>
         {/* {progressModel && (
           <Typography align="center">
             Model Loading Progress: {JSON.stringify(progressModel)}
@@ -169,24 +217,6 @@ export default function App() {
             ))}
           </Box>
         )}
-        <Grid container spacing={2}>
-          {results.map((item, index) => (
-            <Grid size={4} key={index}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6">{item.title}</Typography>
-                  <Typography color="textSecondary">{item.type}</Typography>
-                  <Typography>{item.content}</Typography>
-                  {item.loc && (
-                    <Link href={item.loc} color="primary">
-                      {item.loc}
-                    </Link>
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
       </Container>
     </ThemeProvider>
   );

@@ -5,6 +5,7 @@ export enum WorkerMessage {
   PROGRESS = "progress",
   GENERATE_EMBEDDINGS = "generate-embeddings",
   EMBEDDINGS_GENERATED = "embeddings-generated",
+  DB_READY = "db-ready",
   DB_STATS = "db-stats",
 }
 

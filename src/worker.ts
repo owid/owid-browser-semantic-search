@@ -38,6 +38,9 @@ class PipelineSingleton {
   }
 }
 
+const db = await getDb();
+self.postMessage({ status: WorkerMessage.DB_READY });
+
 const reportProgress = (info: ProgressInfo) => {
   // We add a progress callback to the pipeline so that we can
   // track model loading.
@@ -78,7 +81,6 @@ const generateEmbeddingsForItems = async (db: PGlite) => {
 // Listen for messages to start generating embeddings.
 self.addEventListener("message", async (event) => {
   console.log("Worker received message:", event.data);
-  const db = await getDb();
 
   switch (event.data.cmd) {
     case WorkerMessage.GENERATE_EMBEDDINGS: {

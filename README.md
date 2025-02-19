@@ -82,6 +82,7 @@ export const makeCoreDump = async (
     let urls = countries.map((c) => ({
         loc: urljoin(BAKED_BASE_URL, "country", c.slug),
         title: `${c.name}`,
+        type: "country",
     })) as SitemapUrl[]
 
     urls = urls

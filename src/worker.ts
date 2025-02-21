@@ -12,7 +12,7 @@ import {
 } from "./utils/db";
 import {
   Embedding,
-  EmbeddingRow,
+  RowWithEmbedding,
   parseCoredumpJson,
   RecordType,
   WorkerMessage,
@@ -59,7 +59,7 @@ const generateEmbeddingsForItems = async (db: PGlite) => {
   const batchSize = 100;
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);
-    const results: EmbeddingRow[] = [];
+    const results: RowWithEmbedding[] = [];
     console.log(`Starting embedding batch ${i / batchSize + 1}`);
     for (const item of batch) {
       // Get the embedding output from the pipeline.
@@ -98,7 +98,13 @@ self.addEventListener("message", async (event) => {
     case WorkerMessage.SEARCH: {
       const embedding = await getEmbeddingFor(event.data.text);
       const searchTypes: RecordType[] = event.data.searchTypes;
-      const searchResults = await search(db, embedding, searchTypes);
+      const similarityThreshold: number = event.data.similarityThreshold;
+      const searchResults = await search(
+        db,
+        embedding,
+        searchTypes,
+        similarityThreshold
+      );
       self.postMessage({ status: WorkerMessage.SEARCH_RESULTS, searchResults });
       break;
     }

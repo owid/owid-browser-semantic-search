@@ -1,10 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import {
-  contentTypes,
-  EmbeddingRow,
-  RecordType,
-  WorkerMessage,
-} from "./types.ts";
+import { RecordType, WorkerMessage, RowMetadata } from "./types.ts";
+import { CONTENT_TYPES, SIMILARITY_THRESHOLD } from "./constants.ts";
 import {
   Container,
   TextField,
@@ -24,8 +20,18 @@ import {
   CircularProgress,
   ToggleButtonGroup,
   ToggleButton,
+  Slider,
 } from "@mui/material";
 import { Masonry } from "@mui/lab";
+import SlickSlider from "react-slick";
+import "slick-carousel/slick/slick.css";
+import "slick-carousel/slick/slick-theme.css";
+import "./styles.css";
+import {
+  urlToOwid,
+  groupChartsByTitle,
+  isNotNullOrUndefined,
+} from "./utils/utils";
 
 const darkTheme = createTheme({
   palette: {
@@ -35,9 +41,9 @@ const darkTheme = createTheme({
 
 export default function App() {
   const [input, setInput] = useState("");
-  const [searchTypes, setSearchTypes] = useState(contentTypes);
-  const [iframeSrc, setIframeSrc] = useState<string | null>(null);
-  const [results, setResults] = useState<EmbeddingRow[]>([]);
+  const [searchTypes, setSearchTypes] = useState<RecordType[]>(CONTENT_TYPES);
+  const [iframeSrcs, setIframeSrcs] = useState<string[]>([]);
+  const [results, setResults] = useState<RowMetadata[]>([]);
   const [progress, setProgress] = useState<{
     current: number;
     total: number;
@@ -47,6 +53,18 @@ export default function App() {
   const [dbStats, setDbStats] = useState<{ type: RecordType; count: number }[]>(
     []
   );
+  const [similarityThreshold, setSimilarityThreshold] = useState(0.8);
+
+  const marks = [
+    {
+      value: SIMILARITY_THRESHOLD - 0.5,
+      label: "different",
+    },
+    {
+      value: SIMILARITY_THRESHOLD + 0.5,
+      label: "similar",
+    },
+  ];
 
   // Create a reference to the worker object.
   const worker = useRef<Worker>(null);
@@ -87,13 +105,23 @@ export default function App() {
     }
   };
 
-  const search = async (text: string, types?: RecordType[]) => {
+  const search = async ({
+    text = input,
+    types = searchTypes,
+    threshold = similarityThreshold,
+  }: {
+    text?: string;
+    types?: RecordType[];
+    threshold?: number;
+  }) => {
     if (worker.current) {
       setLoadingSearch(true);
+      setIframeSrcs([]);
       worker.current.postMessage({
         cmd: WorkerMessage.SEARCH,
         text,
-        searchTypes: types || searchTypes,
+        searchTypes: types,
+        similarityThreshold: threshold,
       });
     }
   };
@@ -118,10 +146,15 @@ export default function App() {
     };
   }, []);
 
-  const iframeSrcOwid = iframeSrc?.replace(
-    /^https?:\/\/[^/]+/,
-    "https://ourworldindata.org"
-  );
+  const groupedResults = groupChartsByTitle(results);
+
+  const sliderSettings = {
+    infinite: false,
+    speed: 500,
+    slidesToShow: 1,
+    slidesToScroll: 1,
+    centerPadding: "60px",
+  };
 
   return (
     <ThemeProvider theme={darkTheme}>
@@ -136,123 +169,160 @@ export default function App() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            search(input);
+            search({ text: input });
           }}
         >
           <Grid container spacing={2} alignItems="center">
-            <Grid size={9}>
-              <TextField
-                fullWidth
-                variant="outlined"
-                margin="normal"
-                placeholder="Enter text here"
-                disabled={loadingDb}
-                onChange={(e) => {
-                  setInput(e.target.value);
-                }}
-                value={input}
-              />
+            <TextField
+              fullWidth
+              variant="outlined"
+              margin="normal"
+              placeholder="Enter text here"
+              disabled={loadingDb}
+              onChange={(e) => {
+                setInput(e.target.value);
+              }}
+              value={input}
+            />
+          </Grid>
+
+          <Box sx={{ mt: 2, mb: 2 }}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid size={4}>
+                <ToggleButtonGroup
+                  value={searchTypes}
+                  onChange={(_, types) => {
+                    setSearchTypes(types);
+                  }}
+                  aria-label="search types"
+                  size="small"
+                >
+                  <ToggleButton value="chart">Charts</ToggleButton>
+                  <ToggleButton value="insight">Insights</ToggleButton>
+                  <ToggleButton value="gdoc">Articles</ToggleButton>
+                </ToggleButtonGroup>
+              </Grid>
+              <Grid size={4}>
+                <Slider
+                  value={similarityThreshold}
+                  min={0.7}
+                  max={0.8}
+                  step={0.01}
+                  marks={marks}
+                  track={
+                    similarityThreshold < SIMILARITY_THRESHOLD
+                      ? "normal"
+                      : "inverted"
+                  }
+                  onChange={(_, value) => {
+                    setSimilarityThreshold(value as number);
+                  }}
+                  valueLabelDisplay="auto"
+                />
+              </Grid>
+              <Grid size={3} offset="auto">
+                <Button
+                  type="submit"
+                  variant="contained"
+                  color="primary"
+                  fullWidth
+                  loading={loadingSearch}
+                  disabled={input.length === 0}
+                >
+                  {SIMILARITY_THRESHOLD > similarityThreshold
+                    ? "Find Different"
+                    : "Find Similar"}
+                </Button>
+              </Grid>
             </Grid>
-            <Grid size={3}>
-              <Button
-                type="submit"
-                variant="contained"
-                color="primary"
-                fullWidth
-                loading={loadingSearch}
+          </Box>
+        </form>
+        <Box sx={{ mt: 2, mb: 2 }}>
+          {iframeSrcs && (
+            <SlickSlider {...sliderSettings}>
+              {iframeSrcs.map((src, i) => (
+                <iframe
+                  key={`${src}-${i}`}
+                  src={src}
+                  className="chart-iframe"
+                />
+              ))}
+            </SlickSlider>
+          )}
+        </Box>
+        <Masonry columns={3} spacing={2}>
+          {groupedResults.map(({ title, type, content, locs }) => (
+            <Card key={`${title}-${type}`}>
+              <CardActionArea
+                onClick={() => {
+                  if (title !== input) {
+                    search({ text: title });
+                    setInput(title);
+                  }
+                }}
               >
-                Semantic Search
+                <CardContent>
+                  <Typography lineHeight={1.2} variant="h6" gutterBottom>
+                    {title}
+                  </Typography>
+                  <Typography>{content}</Typography>
+                </CardContent>
+              </CardActionArea>
+              {type === "chart" && (
+                <CardActions>
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      setIframeSrcs(
+                        locs.filter(isNotNullOrUndefined).map(urlToOwid)
+                      );
+                    }}
+                  >
+                    {locs.length > 1 ? "View chart collection" : "View chart"}
+                  </Button>
+                </CardActions>
+              )}
+            </Card>
+          ))}
+          {groupedResults.length > 0 && (
+            <Card>
+              <CardContent>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  color="primary"
+                  onClick={() => {
+                    setInput("");
+                    search({ text: groupedResults[0].title, threshold: 0.7 });
+                  }}
+                >
+                  Something different?
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </Masonry>
+
+        <Box sx={{ mt: 4 }}>
+          <Grid container justifyContent="center">
+            <Grid size={4}>
+              <Button
+                variant="contained"
+                color="secondary"
+                fullWidth
+                sx={{ mb: 2 }}
+                onClick={() => {
+                  if (!worker.current) return;
+                  setLoadingDb(true);
+                  worker.current.postMessage({
+                    cmd: WorkerMessage.GENERATE_EMBEDDINGS,
+                  });
+                }}
+              >
+                Regenerate Embeddings
               </Button>
             </Grid>
           </Grid>
-        </form>
-        <ToggleButtonGroup
-          value={searchTypes}
-          onChange={(_, types) => {
-            console.log("types", types);
-            setSearchTypes(types);
-            search(input, types);
-          }}
-          aria-label="search types"
-          size="small"
-        >
-          <ToggleButton value="chart">Charts</ToggleButton>
-          <ToggleButton value="insight">Insights</ToggleButton>
-          <ToggleButton value="gdoc">Articles</ToggleButton>
-        </ToggleButtonGroup>
-        <Box sx={{ mt: 4 }}>
-          {iframeSrcOwid && (
-            <iframe
-              src={iframeSrcOwid}
-              style={{
-                width: "100%",
-                height: "600px",
-                border: "none",
-                marginBottom: "20px",
-              }}
-            />
-          )}
-          <Masonry columns={3} spacing={2}>
-            {results.map((item) => (
-              <Card key={item.loc || item.title}>
-                <CardActionArea
-                  onClick={() => {
-                    setInput(item.title);
-                    search(item.title);
-                    setIframeSrc(null);
-                  }}
-                >
-                  <CardContent>
-                    <Typography lineHeight={1.2} variant="h6" gutterBottom>
-                      {item.title}
-                    </Typography>
-                    <Typography>{item.content}</Typography>
-                  </CardContent>
-                </CardActionArea>
-                {item.type === "chart" && (
-                  <CardActions>
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        setIframeSrc(item.loc);
-                      }}
-                      // startIcon={<ShowChart />}
-                    >
-                      View chart
-                    </Button>
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        setIframeSrc(
-                          item.loc ? item.loc.concat("?tab=table") : null
-                        );
-                      }}
-                      // startIcon={<TableChart />}
-                    >
-                      View data
-                    </Button>
-                  </CardActions>
-                )}
-              </Card>
-            ))}
-          </Masonry>
-        </Box>
-        <Box sx={{ mt: 4 }}>
-          <Button
-            variant="contained"
-            color="secondary"
-            fullWidth
-            sx={{ mb: 2 }}
-            onClick={() => {
-              if (!worker.current) return;
-              setLoadingDb(true);
-              worker.current.postMessage({
-                cmd: WorkerMessage.GENERATE_EMBEDDINGS,
-              });
-            }}
-          >
-            Regenerate Embeddings
-          </Button>
         </Box>
         {/* {progressModel && (
           <Typography align="center">

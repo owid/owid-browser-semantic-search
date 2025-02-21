@@ -1,6 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { vector } from "@electric-sql/pglite/vector";
-import { contentTypes, EmbeddingRow, RecordType } from "../types";
+import { RowWithEmbedding, RecordType, RowMetadata } from "../types";
+import { CONTENT_TYPES, SIMILARITY_THRESHOLD } from "../constants";
 
 const createDbInstance = async () => {
   // turn on persistent storage
@@ -35,7 +36,7 @@ export const initSchema = async (db: PGlite) => {
     create table if not exists embeddings (
       id bigint primary key generated always as identity,
       title text not null,
-      type text not null check (type in (${contentTypes.join(",")})),
+      type text not null check (type in (${CONTENT_TYPES.join(",")})),
       loc text,
       content text,
       embedding vector (384)
@@ -56,24 +57,28 @@ export const countRowsPerType = async (db: PGlite) => {
 export const search = async (
   db: PGlite,
   embedding: number[],
-  types: RecordType[] = ["chart", "insight", "gdoc"],
-  match_threshold = 0.8,
+  types: RecordType[],
+  match_threshold: number,
   limit = 10
-): Promise<EmbeddingRow[]> => {
-  const res = await db.query<EmbeddingRow>(
+): Promise<RowMetadata[]> => {
+  const res = await db.query<RowMetadata>(
     `
-    select * from embeddings
+    select title, type, loc, content from embeddings
     where type in (${types.map((type) => `'${type}'`).join(",")})
     
     -- The inner product is negative, so we negate match_threshold
-    and embeddings.embedding <#> $1 < $2
+    and embeddings.embedding <#> $1 ${
+      match_threshold > SIMILARITY_THRESHOLD ? "<" : ">"
+    } $2
 
     -- Our embeddings are normalized to length 1, so cosine similarity
     -- and inner product will produce the same query results.
     -- Using inner product which can be computed faster.
     --
     -- For the different distance functions, see https://github.com/pgvector/pgvector
-    order by embeddings.embedding <#> $1
+    order by embeddings.embedding <#> $1 ${
+      match_threshold > SIMILARITY_THRESHOLD ? "asc" : "desc"
+    }
     limit $3;
     `,
     [JSON.stringify(embedding), -Number(match_threshold), Number(limit)]
@@ -83,7 +88,7 @@ export const search = async (
 
 export const insertEmbeddingsBatch = async (
   db: PGlite,
-  results: EmbeddingRow[]
+  results: RowWithEmbedding[]
 ) => {
   // Prepare the placeholders for the database query, e.g. ($1, $2, $3, $4), ($5, $6, $7, $8), ...
   const placeholders = results

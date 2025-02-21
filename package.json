@@ -18,13 +18,16 @@
     "@mui/lab": "^6.0.0-beta.28",
     "@mui/material": "^6.4.4",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-slick": "^0.30.3",
+    "slick-carousel": "^1.8.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",
     "@types/lodash": "^4.17.15",
-    "@types/react": "^19.0.8",
+    "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.3",
+    "@types/react-slick": "^0.23.13",
     "@vitejs/plugin-react": "^4.3.4",
     "eslint": "^9.19.0",
     "eslint-plugin-react-hooks": "^5.0.0",

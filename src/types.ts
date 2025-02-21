@@ -1,3 +1,5 @@
+import { CONTENT_TYPES } from "./constants";
+
 export enum WorkerMessage {
   SEARCH = "search",
   SEARCH_RESULTS = "search-results",
@@ -19,7 +21,7 @@ export type CoredumpJsonRaw = Array<{
   lastmod?: string;
 }>;
 
-export interface RowToEmbed {
+export interface RowMetadata {
   title: string;
   type: RecordType;
   loc: string | null;
@@ -27,12 +29,16 @@ export interface RowToEmbed {
   lastmod: string | null;
 }
 
+export interface RowMetadataMultipleLoc extends Omit<RowMetadata, "loc"> {
+  locs: (string | null)[];
+}
+
 export type Embedding = number[];
-export type EmbeddingRow = RowToEmbed & {
+export type RowWithEmbedding = RowMetadata & {
   embedding: Embedding;
 };
 
-export const parseCoredumpJson = (json: CoredumpJsonRaw): RowToEmbed[] => {
+export const parseCoredumpJson = (json: CoredumpJsonRaw): RowMetadata[] => {
   return json
     .map((item) => {
       if (!isValidType(item.type)) return;
@@ -45,12 +51,10 @@ export const parseCoredumpJson = (json: CoredumpJsonRaw): RowToEmbed[] => {
         lastmod: item.lastmod || null,
       };
     })
-    .filter((x): x is RowToEmbed => !!x);
+    .filter((x): x is RowMetadata => !!x);
 };
-
-export const contentTypes = ["chart", "insight", "gdoc", "dod", "country"];
 
 export const isValidType = (type?: string): type is RecordType => {
   if (!type) return false;
-  return contentTypes.includes(type);
+  return CONTENT_TYPES.includes(type as RecordType);
 };

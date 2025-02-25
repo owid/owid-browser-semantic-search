@@ -9,7 +9,7 @@ const createDbInstance = async () => {
   //   const isPersisted = await navigator.storage.persist();
   //   console.log(`Persisted storage granted: ${isPersisted}`);
   // }
-  const db = new PGlite("idb://owid-semantic-search", {
+  const db = new PGlite("idb://owid-semantic-search-e5", {
     extensions: {
       vector,
     },

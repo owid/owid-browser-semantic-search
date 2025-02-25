@@ -21,7 +21,7 @@ import { PGlite } from "@electric-sql/pglite";
 
 // Singleton to lazily instantiate the feature-extraction pipeline.
 class PipelineSingleton {
-  static model = "Supabase/gte-small";
+  static model = "Xenova/multilingual-e5-small";
   static instance: Promise<FeatureExtractionPipeline>;
 
   static async getInstance(
@@ -124,7 +124,9 @@ self.addEventListener("message", async (event) => {
 const getEmbeddingFor = async (text: string): Promise<Embedding> => {
   const pipelineInstance = await PipelineSingleton.getInstance(reportProgress);
 
-  const output = await pipelineInstance(text, {
+  // prefixing the query with "query: " to match how the model was trained
+  // https://huggingface.co/intfloat/multilingual-e5-small#faq
+  const output = await pipelineInstance(`query: ${text}`, {
     pooling: "mean",
     normalize: true,
   });

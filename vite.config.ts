@@ -7,4 +7,15 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ["@electric-sql/pglite"],
   },
+  build: {
+    target: "esnext", // Add this line to support top-level await
+    rollupOptions: {
+      output: {
+        format: "es",
+      },
+    },
+  },
+  worker: {
+    format: "es",
+  },
 });

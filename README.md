@@ -160,6 +160,10 @@ export function extractTextFromSpans(spans: Span[]): string {
 }
 ```
 
+- update worker.ts to fetch the remote coredump.json file instead of the local one
+
+  `const response = await fetch("http://localhost:3030/coredump.json");`
+
 - run the owid-grapher site locally. This will expose the `http://localhost:3030/coredump.json` route, for this repo to fetch and process.
 
 _Explorers, standalone pages, topic country profiles, author pages are not indexed for this experiment._

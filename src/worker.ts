@@ -51,7 +51,7 @@ const reportProgress = (info: ProgressInfo) => {
 const generateEmbeddingsForItems = async (db: PGlite) => {
   console.log("Generating embeddings for items");
 
-  const response = await fetch("http://localhost:3030/coredump.json");
+  const response = await fetch("/coredump.json");
   const coredumpItems = parseCoredumpJson(await response.json());
 
   const items = coredumpItems;

@@ -36,7 +36,9 @@ export const initSchema = async (db: PGlite) => {
     create table if not exists embeddings (
       id bigint primary key generated always as identity,
       title text not null,
-      type text not null check (type in (${CONTENT_TYPES.join(",")})),
+      type text not null check (type in (${CONTENT_TYPES.map(
+        (type) => `'${type}'`
+      ).join(",")})),
       loc text,
       content text,
       embedding vector (384)

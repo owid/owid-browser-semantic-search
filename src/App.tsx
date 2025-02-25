@@ -94,6 +94,11 @@ export default function App() {
       }
       case WorkerMessage.DB_READY: {
         setLoadingDb(false);
+        if (worker.current) {
+          worker.current.postMessage({
+            cmd: WorkerMessage.DB_STATS,
+          });
+        }
         break;
       }
       case WorkerMessage.DB_STATS: {
@@ -133,11 +138,6 @@ export default function App() {
     });
     // Attach the callback functions as an event listener.
     worker.current.addEventListener("message", onMessageReceived);
-
-    // todo : move this to a button
-    // worker.current.postMessage({
-    //   cmd: WorkerMessage.DB_STATS,
-    // });
 
     return () => {
       if (worker.current) {

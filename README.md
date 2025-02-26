@@ -12,8 +12,8 @@ Alternatively, you can generate a new coredump by following the instructions in 
 
 ## Quick start
 
-- `npm run dev`
-- visit `http://localhost:5173/`
+- `npm run dev` / `npm run preview`
+- visit `http://localhost:5173/` / `http://localhost:4173/`
 - "Generate embeddings" -> this will take a while
 
 You can run searches while the embedding generation is in progress, but the results will be incomplete.

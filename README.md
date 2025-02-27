@@ -1,5 +1,7 @@
 # OWID in-browser semantic search
 
+![OWID in-browser search](https://github.com/user-attachments/assets/f3a0f885-af08-488e-86ee-adc718a269ce)
+
 This is a prototype of a semantic search engine for the OWID website which runs entirely in the browser (from embedding to similarity search).
 
 The goal is to provide a no-infrastructure solution for quick prototyping and experimentation with (semantic) search on the OWID website. It is also a test of how far we can get with only embedding the titles of the site's content (as opposed to the full content).
